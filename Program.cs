@@ -35,7 +35,6 @@ HttpClient CreateGitHubClient()
 {
     var client = new HttpClient();
     client.DefaultRequestHeaders.UserAgent.Add(new ProductInfoHeaderValue("MyApp", "1.0"));
-
     if (!string.IsNullOrWhiteSpace(personalAccessToken))
     {
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", personalAccessToken);
