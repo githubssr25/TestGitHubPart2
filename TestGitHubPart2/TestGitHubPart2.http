@@ -1,0 +1,6 @@
+@TestGitHubPart2_HostAddress = http://localhost:5056
+
+GET {{TestGitHubPart2_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

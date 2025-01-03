@@ -35,6 +35,7 @@ HttpClient CreateGitHubClient()
 {
     var client = new HttpClient();
     client.DefaultRequestHeaders.UserAgent.Add(new ProductInfoHeaderValue("MyApp", "1.0"));
+
     if (!string.IsNullOrWhiteSpace(personalAccessToken))
     {
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", personalAccessToken);
@@ -52,24 +53,91 @@ app.MapGet("/search", async (string query) =>
     var url = $"https://api.github.com/search/repositories?q={Uri.EscapeDataString(query)}";
 
     using var client = new HttpClient();
-    // Required by GitHub
     client.DefaultRequestHeaders.UserAgent.Add(new ProductInfoHeaderValue("MyApp", "1.0"));
 
-    // Optional but recommended: Use your PAT
     if (!string.IsNullOrWhiteSpace(personalAccessToken))
     {
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", personalAccessToken);
     }
 
     var response = await client.GetAsync(url);
+
     if (!response.IsSuccessStatusCode)
     {
         return Results.StatusCode((int)response.StatusCode);
     }
 
     var jsonResponse = await response.Content.ReadAsStringAsync();
-    return Results.Content(jsonResponse, "application/json");
+
+    try
+    {
+        // Parse and reshape the response
+        var repositories = JsonSerializer.Deserialize<JsonElement>(jsonResponse)
+            .GetProperty("items")
+            .EnumerateArray()
+            .Select(repo =>
+            {
+                try
+                {
+                    return new
+                    {
+                        Id = repo.TryGetProperty("id", out var id) ? id.GetInt32() : 0,
+                        Name = repo.TryGetProperty("name", out var name) ? name.GetString() : "Unknown",
+                        FullName = repo.TryGetProperty("full_name", out var fullName) ? fullName.GetString() : "Unknown",
+                        Owner = repo.TryGetProperty("owner", out var owner)
+                            ? new
+                            {
+                                Login = owner.TryGetProperty("login", out var login) ? login.GetString() : "Unknown",
+                                HtmlUrl = owner.TryGetProperty("html_url", out var htmlUrl) ? htmlUrl.GetString() : "Unknown"
+                            }
+                            : null,
+                        HtmlUrl = repo.TryGetProperty("html_url", out var repoHtmlUrl) ? repoHtmlUrl.GetString() : "Unknown",
+                        CloneUrl = repo.TryGetProperty("clone_url", out var cloneUrl) ? cloneUrl.GetString() : "Unknown",
+                        StargazersCount = repo.TryGetProperty("stargazers_count", out var stars) ? stars.GetInt32() : 0,
+                        ForksCount = repo.TryGetProperty("forks_count", out var forks) ? forks.GetInt32() : 0,
+                        WatchersCount = repo.TryGetProperty("watchers_count", out var watchers) ? watchers.GetInt32() : 0,
+                        OpenIssuesCount = repo.TryGetProperty("open_issues_count", out var openIssues) ? openIssues.GetInt32() : 0,
+                        Language = repo.TryGetProperty("language", out var language) ? language.GetString() : "Unknown",
+                        Description = repo.TryGetProperty("description", out var description) ? description.GetString() : "No description",
+                        PushedAt = repo.TryGetProperty("pushed_at", out var pushedAt) ? pushedAt.GetString() : "Not available",
+                        HasIssues = repo.TryGetProperty("has_issues", out var hasIssues) ? hasIssues.GetBoolean() : false,
+                        HasProjects = repo.TryGetProperty("has_projects", out var hasProjects) ? hasProjects.GetBoolean() : false,
+                        Visibility = repo.TryGetProperty("visibility", out var visibility) ? visibility.GetString() : "public",
+                        License = repo.TryGetProperty("license", out var license) && license.TryGetProperty("name", out var licenseName)
+                            ? licenseName.GetString()
+                            : "No license",
+                        Topics = repo.TryGetProperty("topics", out var topics)
+                            ? topics.EnumerateArray().Select(t => t.GetString()).ToList()
+                            : new List<string>(),
+                        ContributorsUrl = repo.TryGetProperty("contributors_url", out var contributorsUrl) ? contributorsUrl.GetString() : "Unknown",
+                        SubscribersUrl = repo.TryGetProperty("subscribers_url", out var subscribersUrl) ? subscribersUrl.GetString() : "Unknown",
+                        CommitsUrl = repo.TryGetProperty("commits_url", out var commitsUrl) ? commitsUrl.GetString() : "Unknown",
+                        GitCommitsUrl = repo.TryGetProperty("git_commits_url", out var gitCommitsUrl) ? gitCommitsUrl.GetString() : "Unknown",
+                        IssuesUrl = repo.TryGetProperty("issues_url", out var issuesUrl) ? issuesUrl.GetString() : "Unknown",
+                        PullsUrl = repo.TryGetProperty("pulls_url", out var pullsUrl) ? pullsUrl.GetString() : "Unknown",
+                        ReleasesUrl = repo.TryGetProperty("releases_url", out var releasesUrl) ? releasesUrl.GetString() : "Unknown",
+                        TagsUrl = repo.TryGetProperty("tags_url", out var tagsUrl) ? tagsUrl.GetString() : "Unknown"
+                    };
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Error processing repository: {ex.Message}");
+                    return null; // Skip invalid repositories
+                }
+            })
+            .Where(repo => repo != null) // Filter out invalid repositories
+            .ToList();
+
+        return Results.Json(repositories);
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"Error parsing response: {ex.Message}");
+        return Results.StatusCode(500);
+    }
 });
+
+
 
 
 app.MapGet("/searchOpenIssueFlexibility", async (string query, int? minOpenIssues) =>
