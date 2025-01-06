@@ -1,9 +1,10 @@
 using System.Net.Http.Headers;
 using System.Text.Json;
 using System.Collections.Generic; // Ensure this is included
-using System.Net.Http.Headers; // Required for ProductInfoHeaderValue
-using System.Text.Json; // Required for JSON serialization
 using System.Text.Json.Serialization; // Handles case-insensitive deserialization
+using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.Authentication.Cookies;
 using TestDemo; // Single namespace for all models
 
 var builder = WebApplication.CreateBuilder(args);
@@ -28,7 +29,26 @@ var personalAccessToken = config["GitHub:PersonalAccessToken"];
 
 //https://goodfirstissues.com/
 
+// Configure database context
+builder.Services.AddDbContext<GitHubPostMVPDbContext>(options =>
+    options.UseNpgsql(config.GetConnectionString("GitHubPostMVPConnection")));
 
+// Configure Identity (if needed)
+builder.Services.AddIdentity<IdentityUser, IdentityRole>()
+    .AddEntityFrameworkStores<GitHubPostMVPDbContext>()
+    .AddDefaultTokenProviders();
+
+// Configure authentication (if needed)
+builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
+    .AddCookie(options =>
+    {
+        options.LoginPath = "/login";
+        options.LogoutPath = "/logout";
+    });
+
+// Configure logging (optional)
+builder.Logging.ClearProviders();
+builder.Logging.AddConsole();
 
 // Helper method to create a reusable GitHub HttpClient
 HttpClient CreateGitHubClient()
@@ -431,9 +451,44 @@ app.MapGet("/nss-search", async (
 });
 
 
+app.MapGet("/recent-issues-distinct", async (HttpContext context) =>
+{
+    var daysParam = context.Request.Query["days"];
+    int days = int.TryParse(daysParam, out var parsedDays) ? parsedDays : 7;
 
+    var dateFrom = DateTime.UtcNow.AddDays(-days).ToString("yyyy-MM-dd");
+    var query = $"is:issue is:open created:>={dateFrom}";
+    var url = $"https://api.github.com/search/issues?q={Uri.EscapeDataString(query)}&per_page=100";
 
+    using var client = new HttpClient();
+    client.DefaultRequestHeaders.UserAgent.Add(new ProductInfoHeaderValue("MyApp", "1.0"));
 
+    if (!string.IsNullOrWhiteSpace(personalAccessToken))
+    {
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", personalAccessToken);
+    }
+
+    var response = await client.GetAsync(url);
+
+    if (!response.IsSuccessStatusCode)
+    {
+        return Results.StatusCode((int)response.StatusCode);
+    }
+
+    var jsonResponse = await response.Content.ReadAsStringAsync();
+    var result = JsonSerializer.Deserialize<JsonElement>(jsonResponse);
+
+    // Extract and group by repository URL
+    var distinctRepos = result.GetProperty("items").EnumerateArray()
+        .Where(issue => issue.TryGetProperty("repository_url", out var repoUrl) && repoUrl.ValueKind == JsonValueKind.String)
+        .Select(issue => issue.GetProperty("repository_url").GetString())
+        .Distinct()
+        .ToList();
+
+    Console.WriteLine($"Distinct Repository Count: {distinctRepos.Count}");
+
+    return Results.Json(distinctRepos);
+});
 
 
 app.Run();
