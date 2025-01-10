@@ -64,7 +64,21 @@ HttpClient CreateGitHubClient()
     return client;
 }
 
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowFrontend",
+        policy =>
+        {
+            policy.WithOrigins("http://localhost:5173") // Frontend URL
+                  .AllowAnyHeader()
+                  .AllowAnyMethod();
+        });
+});
+
 var app = builder.Build();
+
+// Use CORS policy
+app.UseCors("AllowFrontend");
 
 // Configure the HTTP request pipeline.
 
@@ -489,6 +503,129 @@ app.MapGet("/recent-issues-distinct", async (HttpContext context) =>
 
     return Results.Json(distinctRepos);
 });
+
+
+
+
+
+
+
+
+
+
+app.MapGet("/testFilterSearch", async (
+    string? query,
+    string? type = "repositories",
+    bool? goodFirstIssue = false,
+    bool? helpWanted = false,
+    int? minStars = null,
+    int? maxStars = null,
+    string? language = null,
+    string? createdAfter = null,
+    string? updatedAfter = null,
+    string? pushedBefore = null,
+    bool? hasOpenIssues = null,
+    string? topics = null,
+    string? visibility = null,
+    string? readmeKeyword = null
+) =>
+{
+    // Ensure query is required
+    if (string.IsNullOrWhiteSpace(query))
+    {
+        return Results.BadRequest("Query parameter is required.");
+    }
+
+    // Build the filter query based on parameters
+    string filter = $"{query}";
+
+    if (!string.IsNullOrWhiteSpace(language)) filter += $" language:{language}";
+    if (minStars.HasValue) filter += $" stars:>{minStars.Value}";
+    if (maxStars.HasValue) filter += $" stars:<{maxStars.Value}";
+    if (!string.IsNullOrWhiteSpace(createdAfter)) filter += $" created:>{createdAfter}";
+    if (!string.IsNullOrWhiteSpace(updatedAfter)) filter += $" pushed:>{updatedAfter}";
+    if (!string.IsNullOrWhiteSpace(pushedBefore)) filter += $" pushed:<{pushedBefore}";
+    if (hasOpenIssues == true) filter += " has:issues";
+    if (!string.IsNullOrWhiteSpace(topics)) filter += $" topic:{topics}";
+    if (!string.IsNullOrWhiteSpace(visibility)) filter += $" visibility:{visibility}";
+    if (!string.IsNullOrWhiteSpace(readmeKeyword)) filter += $" in:readme {readmeKeyword}";
+
+    if (type == "issues")
+    {
+        filter += " is:issue is:open";
+        if (goodFirstIssue == true) filter += " label:\"good first issue\"";
+        if (helpWanted == true) filter += " label:\"help wanted\"";
+    }
+
+    var url = $"https://api.github.com/search/{type}?q={Uri.EscapeDataString(filter)}";
+
+    using var client = new HttpClient();
+    client.DefaultRequestHeaders.UserAgent.Add(new ProductInfoHeaderValue("TestApp", "1.0"));
+
+    var response = await client.GetAsync(url);
+    if (!response.IsSuccessStatusCode)
+    {
+        return Results.StatusCode((int)response.StatusCode);
+    }
+
+    var jsonResponse = await response.Content.ReadAsStringAsync();
+    try
+    {
+        // Reshape the response to include only relevant fields
+        var repositories = JsonSerializer.Deserialize<JsonElement>(jsonResponse)
+            .GetProperty("items")
+            .EnumerateArray()
+            .Select(repo =>
+            {
+                try
+                {
+                    return new
+                    {
+                        Id = repo.GetProperty("id").GetInt32(),
+                        Name = repo.GetProperty("name").GetString(),
+                        FullName = repo.GetProperty("full_name").GetString(),
+                        HtmlUrl = repo.GetProperty("html_url").GetString(),
+                        Description = repo.TryGetProperty("description", out var description) ? description.GetString() : "No description",
+                        Language = repo.TryGetProperty("language", out var language) ? language.GetString() : "Unknown",
+                        Stars = repo.GetProperty("stargazers_count").GetInt32(),
+                        Forks = repo.GetProperty("forks_count").GetInt32(),
+                        Topics = repo.TryGetProperty("topics", out var topics)
+                            ? topics.EnumerateArray().Select(t => t.GetString()).ToList()
+                            : new List<string>(),
+                        OpenIssues = repo.GetProperty("open_issues_count").GetInt32(),
+                        CreatedAt = repo.GetProperty("created_at").GetString(),
+                        PushedAt = repo.GetProperty("pushed_at").GetString(),
+                        Owner = new
+                        {
+                            Name = repo.GetProperty("owner").GetProperty("login").GetString(),
+                            HtmlUrl = repo.GetProperty("owner").GetProperty("html_url").GetString()
+                        },
+                        UpdatedAt = repo.GetProperty("updated_at").GetString(),
+                        HasIssues = repo.GetProperty("has_issues").GetBoolean(),
+                        HasProjects = repo.GetProperty("has_projects").GetBoolean(),
+                        // PullsUrl = repo.GetProperty("pulls_url").GetString(),
+                        // ReleasesUrl = repo.GetProperty("releases_url").GetString(),
+
+                    };
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Error processing repository: {ex.Message}");
+                    return null; // Skip invalid repositories
+                }
+            })
+            .Where(repo => repo != null) // Filter out invalid repositories
+            .ToList();
+
+        return Results.Json(repositories);
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"Error reshaping response: {ex.Message}");
+        return Results.StatusCode(500);
+    }
+});
+
 
 
 app.Run();

@@ -1,4 +1,4 @@
-const BASE_URL = "http://localhost:5201/api/repository";
+const BASE_URL = "http://localhost:5056/api/repository";
 
 // Fetch all repositories
 export const getAllRepositories = async () => {
@@ -91,8 +91,91 @@ export const deleteRepository = async (repositoryId) => {
   }
 };
 
+export const getRecentIssuesDistinct = async (days = 7) => {
+  try {
+    const response = await fetch(`/api/recent-issues-distinct?days=${days}`, {
+      method: "GET",
+    });
 
+    if (!response.ok) {
+      throw new Error(`Error fetching recent distinct issues: ${response.statusText}`);
+    }
 
+    return await response.json(); // Parse and return JSON response
+  } catch (error) {
+    console.error("Error fetching recent distinct issues:", error);
+    throw error;
+  }
+};
+
+export const searchRepositories = async (params = {}) => {
+  try {
+    const queryParams = new URLSearchParams(params).toString();
+    const response = await fetch(`${BASE_URL}/search?${queryParams}`, {
+      method: "GET",
+    });
+
+    if (!response.ok) {
+      throw new Error(`Error fetching repositories: ${response.statusText}`);
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error("Error searching repositories:", error);
+    throw error;
+  }
+};
+
+export const searchTestFilterSearch = async ({
+  query,
+  type = "repositories",
+  goodFirstIssue = false,
+  helpWanted = false,
+  minStars = null,
+  maxStars = null,
+  language = null,
+  createdAfter = null,
+  updatedAfter = null,
+  pushedBefore = null,
+  hasOpenIssues = false,
+  topics = null,
+  visibility = null,
+  readmeKeyword = null,
+}) => {
+  try {
+    const BASE_URL = "http://localhost:5056"; // Update with your backend URL
+    const url = new URL("/testFilterSearch", BASE_URL);
+
+    // Append query parameters
+    if (query) url.searchParams.append("query", query);
+    if (type) url.searchParams.append("type", type);
+    if (goodFirstIssue) url.searchParams.append("goodFirstIssue", goodFirstIssue.toString());
+    if (helpWanted) url.searchParams.append("helpWanted", helpWanted.toString());
+    if (minStars) url.searchParams.append("minStars", minStars);
+    if (maxStars) url.searchParams.append("maxStars", maxStars);
+    if (language) url.searchParams.append("language", language);
+    if (createdAfter) url.searchParams.append("createdAfter", createdAfter);
+    if (updatedAfter) url.searchParams.append("updatedAfter", updatedAfter);
+    if (pushedBefore) url.searchParams.append("pushedBefore", pushedBefore);
+    if (hasOpenIssues) url.searchParams.append("hasOpenIssues", hasOpenIssues.toString());
+    if (topics) url.searchParams.append("topics", topics);
+    if (visibility) url.searchParams.append("visibility", visibility);
+    if (readmeKeyword) url.searchParams.append("readmeKeyword", readmeKeyword);
+
+    const response = await fetch(url.toString(), {
+      method: "GET",
+    });
+
+    if (!response.ok) {
+      throw new Error(`Error fetching repositories: ${response.statusText}`);
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error("Error searching repositories:", error);
+    throw error;
+  }
+};
 
 
 
