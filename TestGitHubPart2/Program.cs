@@ -5,7 +5,9 @@ using System.Text.Json.Serialization; // Handles case-insensitive deserializatio
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Authentication.Cookies;
-using TestDemo; // Single namespace for all models
+using PostMVPFinalProject.Context;
+using  PostMVPProject.Extractor;
+using  PostMVPProject.Models;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -32,6 +34,17 @@ var personalAccessToken = config["GitHub:PersonalAccessToken"];
 // Configure database context
 builder.Services.AddDbContext<GitHubPostMVPDbContext>(options =>
     options.UseNpgsql(config.GetConnectionString("GitHubPostMVPConnection")));
+
+
+ // Add session services ADDING THIS 1-13-24 FOR OAUTH SECURITY 
+builder.Services.AddDistributedMemoryCache();
+builder.Services.AddSession(options =>
+{
+    options.Cookie.HttpOnly = true; // Prevent JavaScript access to session cookie
+    options.Cookie.IsEssential = true; // Ensure session works even if GDPR cookie consent is required
+    options.IdleTimeout = TimeSpan.FromMinutes(60); // Set session timeout
+});
+
 
 // Configure Identity (if needed)
 builder.Services.AddIdentity<IdentityUser, IdentityRole>()
@@ -80,122 +93,6 @@ var app = builder.Build();
 // Use CORS policy
 app.UseCors("AllowFrontend");
 
-// Configure the HTTP request pipeline.
-
-app.MapGet("/search", async (string query) =>
-{
-    var url = $"https://api.github.com/search/repositories?q={Uri.EscapeDataString(query)}";
-
-    using var client = new HttpClient();
-    client.DefaultRequestHeaders.UserAgent.Add(new ProductInfoHeaderValue("MyApp", "1.0"));
-
-    if (!string.IsNullOrWhiteSpace(personalAccessToken))
-    {
-        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", personalAccessToken);
-    }
-
-    var response = await client.GetAsync(url);
-
-    if (!response.IsSuccessStatusCode)
-    {
-        return Results.StatusCode((int)response.StatusCode);
-    }
-
-    var jsonResponse = await response.Content.ReadAsStringAsync();
-
-    try
-    {
-        // Parse and reshape the response
-        var repositories = JsonSerializer.Deserialize<JsonElement>(jsonResponse)
-            .GetProperty("items")
-            .EnumerateArray()
-            .Select(repo =>
-            {
-                try
-                {
-                    return new
-                    {
-                        Id = repo.TryGetProperty("id", out var id) ? id.GetInt32() : 0,
-                        Name = repo.TryGetProperty("name", out var name) ? name.GetString() : "Unknown",
-                        FullName = repo.TryGetProperty("full_name", out var fullName) ? fullName.GetString() : "Unknown",
-                        Owner = repo.TryGetProperty("owner", out var owner)
-                            ? new
-                            {
-                                Login = owner.TryGetProperty("login", out var login) ? login.GetString() : "Unknown",
-                                HtmlUrl = owner.TryGetProperty("html_url", out var htmlUrl) ? htmlUrl.GetString() : "Unknown"
-                            }
-                            : null,
-                        HtmlUrl = repo.TryGetProperty("html_url", out var repoHtmlUrl) ? repoHtmlUrl.GetString() : "Unknown",
-                        CloneUrl = repo.TryGetProperty("clone_url", out var cloneUrl) ? cloneUrl.GetString() : "Unknown",
-                        StargazersCount = repo.TryGetProperty("stargazers_count", out var stars) ? stars.GetInt32() : 0,
-                        ForksCount = repo.TryGetProperty("forks_count", out var forks) ? forks.GetInt32() : 0,
-                        WatchersCount = repo.TryGetProperty("watchers_count", out var watchers) ? watchers.GetInt32() : 0,
-                        OpenIssuesCount = repo.TryGetProperty("open_issues_count", out var openIssues) ? openIssues.GetInt32() : 0,
-                        Language = repo.TryGetProperty("language", out var language) ? language.GetString() : "Unknown",
-                        Description = repo.TryGetProperty("description", out var description) ? description.GetString() : "No description",
-                        PushedAt = repo.TryGetProperty("pushed_at", out var pushedAt) ? pushedAt.GetString() : "Not available",
-                        HasIssues = repo.TryGetProperty("has_issues", out var hasIssues) ? hasIssues.GetBoolean() : false,
-                        HasProjects = repo.TryGetProperty("has_projects", out var hasProjects) ? hasProjects.GetBoolean() : false,
-                        Visibility = repo.TryGetProperty("visibility", out var visibility) ? visibility.GetString() : "public",
-                        License = repo.TryGetProperty("license", out var license) && license.TryGetProperty("name", out var licenseName)
-                            ? licenseName.GetString()
-                            : "No license",
-                        Topics = repo.TryGetProperty("topics", out var topics)
-                            ? topics.EnumerateArray().Select(t => t.GetString()).ToList()
-                            : new List<string>(),
-                        ContributorsUrl = repo.TryGetProperty("contributors_url", out var contributorsUrl) ? contributorsUrl.GetString() : "Unknown",
-                        SubscribersUrl = repo.TryGetProperty("subscribers_url", out var subscribersUrl) ? subscribersUrl.GetString() : "Unknown",
-                        CommitsUrl = repo.TryGetProperty("commits_url", out var commitsUrl) ? commitsUrl.GetString() : "Unknown",
-                        GitCommitsUrl = repo.TryGetProperty("git_commits_url", out var gitCommitsUrl) ? gitCommitsUrl.GetString() : "Unknown",
-                        IssuesUrl = repo.TryGetProperty("issues_url", out var issuesUrl) ? issuesUrl.GetString() : "Unknown",
-                        PullsUrl = repo.TryGetProperty("pulls_url", out var pullsUrl) ? pullsUrl.GetString() : "Unknown",
-                        ReleasesUrl = repo.TryGetProperty("releases_url", out var releasesUrl) ? releasesUrl.GetString() : "Unknown",
-                        TagsUrl = repo.TryGetProperty("tags_url", out var tagsUrl) ? tagsUrl.GetString() : "Unknown"
-                    };
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"Error processing repository: {ex.Message}");
-                    return null; // Skip invalid repositories
-                }
-            })
-            .Where(repo => repo != null) // Filter out invalid repositories
-            .ToList();
-
-        return Results.Json(repositories);
-    }
-    catch (Exception ex)
-    {
-        Console.WriteLine($"Error parsing response: {ex.Message}");
-        return Results.StatusCode(500);
-    }
-});
-
-
-
-
-app.MapGet("/searchOpenIssueFlexibility", async (string query, int? minOpenIssues) =>
-{
-    var filter = query;
-
-    // Add open issues filter dynamically if provided
-    if (minOpenIssues.HasValue)
-    {
-        filter += $" open_issues:>{minOpenIssues.Value}";
-    }
-
-    var url = $"https://api.github.com/search/repositories?q={Uri.EscapeDataString(filter)}";
-
-    using var client = new HttpClient();
-    client.DefaultRequestHeaders.UserAgent.Add(new ProductInfoHeaderValue("MyApp", "1.0"));
-
-    var response = await client.GetAsync(url);
-    if (!response.IsSuccessStatusCode) return Results.StatusCode((int)response.StatusCode);
-
-    var jsonResponse = await response.Content.ReadAsStringAsync();
-    return Results.Content(jsonResponse, "application/json");
-});
-
 
 //doesnt appear to be working 
 // 1. Up-for-grabs endpoint: returns a list of projects as JSON
@@ -208,54 +105,17 @@ app.MapGet("/up-for-grabs", async (string? language) =>
     if (!response.IsSuccessStatusCode) return Results.StatusCode((int)response.StatusCode);
 
     var jsonResponse = await response.Content.ReadAsStringAsync();
-    var projects = JsonSerializer.Deserialize<List<UpForGrabsProject>>(jsonResponse) ?? new List<UpForGrabsProject>();
+    var projects = JsonSerializer.Deserialize<List<JsonElement>>(jsonResponse) ?? new List<JsonElement>();
 
     if (!string.IsNullOrWhiteSpace(language))
     {
         projects = projects
-            .Where(p => p.Tags != null && p.Tags.Any(t => t.Equals(language, StringComparison.OrdinalIgnoreCase)))
+            .Where(p => p.GetProperty("tags").EnumerateArray()
+                .Any(tag => tag.GetString().Equals(language, StringComparison.OrdinalIgnoreCase)))
             .ToList();
     }
 
     return Results.Json(projects);
-});
-
-
-// 2. FreeCodeCamp issues: returns issues from their GitHub repo
-app.MapGet("/fcc-issues", async (bool? goodFirstIssue = false, bool? helpWanted = false, string? state = "open") =>
-{
-    var url = "https://api.github.com/repos/freecodecamp/freecodecamp/issues";
-
-    // Add optional query params for filtering
-    var queryParams = new List<string>();
-
-    if (goodFirstIssue == true)
-    {
-        queryParams.Add("labels=good+first+issue");
-    }
-
-    if (helpWanted == true)
-    {
-        queryParams.Add("labels=help+wanted");
-    }
-
-    if (!string.IsNullOrWhiteSpace(state))
-    {
-        queryParams.Add($"state={state}");
-    }
-
-    // Append the query params to the URL if any exist
-    if (queryParams.Any())
-    {
-        url += "?" + string.Join("&", queryParams);
-    }
-
-    using var client = CreateGitHubClient();
-    var response = await client.GetAsync(url);
-    if (!response.IsSuccessStatusCode) return Results.StatusCode((int)response.StatusCode);
-
-    var json = await response.Content.ReadAsStringAsync();
-    return Results.Content(json, "application/json");
 });
 
 
@@ -291,22 +151,6 @@ app.MapGet("/awesome-beginners", async (
 
 
 
-
-
-
-// 4. Search issues with "good first issue" label across all GitHub repos
-app.MapGet("/search-issues", async () =>
-{
-    // Searching issues labeled "good first issue"
-    var url = "https://api.github.com/search/issues?q=is:open+is:issue+label:good-first-issue";
-    using var client = CreateGitHubClient();
-    var response = await client.GetAsync(url);
-    if (!response.IsSuccessStatusCode) return Results.StatusCode((int)response.StatusCode);
-
-    var json = await response.Content.ReadAsStringAsync();
-    return Results.Content(json, "application/json");
-});
-
 // Filtered endpoint example
 app.MapGet("/fcc-issues/filter", async (string? label, string? state, int? limit) =>
 {
@@ -318,206 +162,65 @@ app.MapGet("/fcc-issues/filter", async (string? label, string? state, int? limit
     var json = await response.Content.ReadAsStringAsync();
 
     var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
-    var issues = JsonSerializer.Deserialize<List<GitHubIssue>>(json, options) ?? new List<GitHubIssue>();
+      var issues = JsonSerializer.Deserialize<List<JsonElement>>(json, options) ?? new List<JsonElement>();
 
     if (!string.IsNullOrWhiteSpace(label))
     {
         issues = issues
-            .Where(i => i.Labels.Any(l => l.Name.Equals(label, StringComparison.OrdinalIgnoreCase)))
+            .Where(i => i.GetProperty("labels").EnumerateArray()
+                .Any(l => l.GetProperty("name").GetString().Equals(label, StringComparison.OrdinalIgnoreCase)))
             .ToList();
     }
 
     if (!string.IsNullOrWhiteSpace(state))
     {
         issues = issues
-            .Where(i => i.State.Equals(state, StringComparison.OrdinalIgnoreCase))
+            .Where(i => i.GetProperty("state").GetString().Equals(state, StringComparison.OrdinalIgnoreCase))
             .ToList();
-    }
-
-    if (limit.HasValue && limit.Value > 0)
-    {
-        issues = issues.Take(limit.Value).ToList();
     }
 
     return Results.Json(issues);
 });
 
-// Good first issue endpoint
-app.MapGet("/fcc-issues/good-first", async () =>
-{
-    var url = "https://api.github.com/repos/freeCodeCamp/freeCodeCamp/issues";
-    using var client = CreateGitHubClient();
-    var response = await client.GetAsync(url);
-    if (!response.IsSuccessStatusCode) return Results.StatusCode((int)response.StatusCode);
-
-    var json = await response.Content.ReadAsStringAsync();
-
-    var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
-    var issues = JsonSerializer.Deserialize<List<GitHubIssue>>(json, options) ?? new List<GitHubIssue>();
-
-    var filtered = issues.Where(i =>
-        i.Labels.Any(l => l.Name.Equals("good first issue", StringComparison.OrdinalIgnoreCase))
-    );
-
-    return Results.Json(filtered);
-});
 
 
+// app.MapGet("/github-contributions", async (string? language, string? label, int? limit) =>
+// {
+//     var query = "state:open"; // Base query to only show open issues
 
-app.MapGet("/github-contributions", async (string? language, string? label, int? limit) =>
-{
-    var query = "state:open"; // Base query to only show open issues
+//     // Add label filter
+//     if (!string.IsNullOrWhiteSpace(label))
+//     {
+//         query += $" label:\"{Uri.EscapeDataString(label)}\"";
+//     }
+//     else
+//     {
+//         query += " label:\"good first issue\"";
+//     }
 
-    // Add label filter
-    if (!string.IsNullOrWhiteSpace(label))
-    {
-        query += $" label:\"{Uri.EscapeDataString(label)}\"";
-    }
-    else
-    {
-        query += " label:\"good first issue\"";
-    }
+//     // Add language filter
+//     if (!string.IsNullOrWhiteSpace(language))
+//     {
+//         query += $" language:{Uri.EscapeDataString(language)}";
+//     }
 
-    // Add language filter
-    if (!string.IsNullOrWhiteSpace(language))
-    {
-        query += $" language:{Uri.EscapeDataString(language)}";
-    }
+//     // URL to search GitHub issues
+//     var url = $"https://api.github.com/search/issues?q={query}&per_page={limit ?? 10}";
 
-    // URL to search GitHub issues
-    var url = $"https://api.github.com/search/issues?q={query}&per_page={limit ?? 10}";
+//     using var client = new HttpClient();
+//     client.DefaultRequestHeaders.UserAgent.Add(new ProductInfoHeaderValue("MyApp", "1.0"));
+//     client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", "YOUR_PERSONAL_ACCESS_TOKEN");
 
-    using var client = new HttpClient();
-    client.DefaultRequestHeaders.UserAgent.Add(new ProductInfoHeaderValue("MyApp", "1.0"));
-    client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", "YOUR_PERSONAL_ACCESS_TOKEN");
+//     var response = await client.GetAsync(url);
+//     if (!response.IsSuccessStatusCode) return Results.StatusCode((int)response.StatusCode);
 
-    var response = await client.GetAsync(url);
-    if (!response.IsSuccessStatusCode) return Results.StatusCode((int)response.StatusCode);
-
-    var jsonResponse = await response.Content.ReadAsStringAsync();
-    return Results.Content(jsonResponse, "application/json");
-});
-
+//     var jsonResponse = await response.Content.ReadAsStringAsync();
+//     return Results.Content(jsonResponse, "application/json");
+// });
 
 
-app.MapGet("/nss-search", async (
-    string? query, 
-    string? type = "repositories", 
-    bool? goodFirstIssue = false, 
-    bool? helpWanted = false, 
-    int? minStars = null, 
-    string? language = null,
-    string? createdAfter = null, 
-    string? updatedAfter = null
-) =>
-{
-    // Default query to 'Nashville Software School' if no query is provided
-    var searchQuery = string.IsNullOrWhiteSpace(query) ? "Nashville Software School" : query;
-
-    // Build the filter query based on type
-    string filter = $"{searchQuery}";
-
-    // Add filters based on the user's request
-    if (!string.IsNullOrWhiteSpace(language))
-    {
-        filter += $" language:{language}";
-    }
-
-    if (minStars.HasValue)
-    {
-        filter += $" stars:>{minStars.Value}";
-    }
-
-    if (!string.IsNullOrWhiteSpace(createdAfter))
-    {
-        filter += $" created:>{createdAfter}";
-    }
-
-    if (!string.IsNullOrWhiteSpace(updatedAfter))
-    {
-        filter += $" pushed:>{updatedAfter}";
-    }
-
-    if (type == "issues")
-    {
-        filter += " is:issue is:open";
-        if (goodFirstIssue == true)
-        {
-            filter += " label:\"good first issue\"";
-        }
-        if (helpWanted == true)
-        {
-            filter += " label:\"help wanted\"";
-        }
-    }
-
-    // API URL for GitHub search
-    var url = $"https://api.github.com/search/{type}?q={Uri.EscapeDataString(filter)}";
-
-    using var client = new HttpClient();
-    client.DefaultRequestHeaders.UserAgent.Add(new ProductInfoHeaderValue("NSSApp", "1.0"));
-
-    var response = await client.GetAsync(url);
-    if (!response.IsSuccessStatusCode) return Results.StatusCode((int)response.StatusCode);
-
-    var jsonResponse = await response.Content.ReadAsStringAsync();
-    return Results.Content(jsonResponse, "application/json");
-});
-
-
-app.MapGet("/recent-issues-distinct", async (HttpContext context) =>
-{
-    var daysParam = context.Request.Query["days"];
-    int days = int.TryParse(daysParam, out var parsedDays) ? parsedDays : 7;
-
-    var dateFrom = DateTime.UtcNow.AddDays(-days).ToString("yyyy-MM-dd");
-    var query = $"is:issue is:open created:>={dateFrom}";
-    var url = $"https://api.github.com/search/issues?q={Uri.EscapeDataString(query)}&per_page=100";
-
-    using var client = new HttpClient();
-    client.DefaultRequestHeaders.UserAgent.Add(new ProductInfoHeaderValue("MyApp", "1.0"));
-
-    if (!string.IsNullOrWhiteSpace(personalAccessToken))
-    {
-        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", personalAccessToken);
-    }
-
-    var response = await client.GetAsync(url);
-
-    if (!response.IsSuccessStatusCode)
-    {
-        return Results.StatusCode((int)response.StatusCode);
-    }
-
-    var jsonResponse = await response.Content.ReadAsStringAsync();
-    var result = JsonSerializer.Deserialize<JsonElement>(jsonResponse);
-
-    // Extract and group by repository URL
-    var distinctRepos = result.GetProperty("items").EnumerateArray()
-        .Where(issue => issue.TryGetProperty("repository_url", out var repoUrl) && repoUrl.ValueKind == JsonValueKind.String)
-        .Select(issue => issue.GetProperty("repository_url").GetString())
-        .Distinct()
-        .ToList();
-
-    Console.WriteLine($"Distinct Repository Count: {distinctRepos.Count}");
-
-    return Results.Json(distinctRepos);
-});
-
-
-
-
-
-
-
-
-
-
-app.MapGet("/testFilterSearch", async (
-    string? query,
-    string? type = "repositories",
-    bool? goodFirstIssue = false,
-    bool? helpWanted = false,
+app.MapGet("/search-repositories", async (
+    string query,
     int? minStars = null,
     int? maxStars = null,
     string? language = null,
@@ -530,15 +233,14 @@ app.MapGet("/testFilterSearch", async (
     string? readmeKeyword = null
 ) =>
 {
-    // Ensure query is required
     if (string.IsNullOrWhiteSpace(query))
     {
         return Results.BadRequest("Query parameter is required.");
     }
 
-    // Build the filter query based on parameters
-    string filter = $"{query}";
 
+try {
+    string filter = $"{query}";
     if (!string.IsNullOrWhiteSpace(language)) filter += $" language:{language}";
     if (minStars.HasValue) filter += $" stars:>{minStars.Value}";
     if (maxStars.HasValue) filter += $" stars:<{maxStars.Value}";
@@ -550,17 +252,10 @@ app.MapGet("/testFilterSearch", async (
     if (!string.IsNullOrWhiteSpace(visibility)) filter += $" visibility:{visibility}";
     if (!string.IsNullOrWhiteSpace(readmeKeyword)) filter += $" in:readme {readmeKeyword}";
 
-    if (type == "issues")
-    {
-        filter += " is:issue is:open";
-        if (goodFirstIssue == true) filter += " label:\"good first issue\"";
-        if (helpWanted == true) filter += " label:\"help wanted\"";
-    }
-
-    var url = $"https://api.github.com/search/{type}?q={Uri.EscapeDataString(filter)}";
+    var url = $"https://api.github.com/search/repositories?q={Uri.EscapeDataString(filter)}";
 
     using var client = new HttpClient();
-    client.DefaultRequestHeaders.UserAgent.Add(new ProductInfoHeaderValue("TestApp", "1.0"));
+    client.DefaultRequestHeaders.UserAgent.Add(new ProductInfoHeaderValue("App", "1.0"));
 
     var response = await client.GetAsync(url);
     if (!response.IsSuccessStatusCode)
@@ -569,60 +264,154 @@ app.MapGet("/testFilterSearch", async (
     }
 
     var jsonResponse = await response.Content.ReadAsStringAsync();
-    try
+    // Console.WriteLine(jsonResponse);  // Log response to identify null values
+    var repositories = JsonSerializer.Deserialize<JsonElement>(jsonResponse)
+        .GetProperty("items")
+        .EnumerateArray()
+        .Select(repo =>
     {
-        // Reshape the response to include only relevant fields
-        var repositories = JsonSerializer.Deserialize<JsonElement>(jsonResponse)
-            .GetProperty("items")
-            .EnumerateArray()
-            .Select(repo =>
-            {
-                try
-                {
-                    return new
-                    {
-                        Id = repo.GetProperty("id").GetInt32(),
-                        Name = repo.GetProperty("name").GetString(),
-                        FullName = repo.GetProperty("full_name").GetString(),
-                        HtmlUrl = repo.GetProperty("html_url").GetString(),
-                        Description = repo.TryGetProperty("description", out var description) ? description.GetString() : "No description",
-                        Language = repo.TryGetProperty("language", out var language) ? language.GetString() : "Unknown",
-                        Stars = repo.GetProperty("stargazers_count").GetInt32(),
-                        Forks = repo.GetProperty("forks_count").GetInt32(),
-                        Topics = repo.TryGetProperty("topics", out var topics)
-                            ? topics.EnumerateArray().Select(t => t.GetString()).ToList()
-                            : new List<string>(),
-                        OpenIssues = repo.GetProperty("open_issues_count").GetInt32(),
-                        CreatedAt = repo.GetProperty("created_at").GetString(),
-                        PushedAt = repo.GetProperty("pushed_at").GetString(),
-                        Owner = new
-                        {
-                            Name = repo.GetProperty("owner").GetProperty("login").GetString(),
-                            HtmlUrl = repo.GetProperty("owner").GetProperty("html_url").GetString()
-                        },
-                        UpdatedAt = repo.GetProperty("updated_at").GetString(),
-                        HasIssues = repo.GetProperty("has_issues").GetBoolean(),
-                        HasProjects = repo.GetProperty("has_projects").GetBoolean(),
-                        // PullsUrl = repo.GetProperty("pulls_url").GetString(),
-                        // ReleasesUrl = repo.GetProperty("releases_url").GetString(),
+        if (repo.ValueKind != JsonValueKind.Object)
+        {
+            return null;  // Safeguard against any non-object entries
+        }
 
-                    };
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"Error processing repository: {ex.Message}");
-                    return null; // Skip invalid repositories
-                }
-            })
-            .Where(repo => repo != null) // Filter out invalid repositories
+         // Extract owner safely first
+            JsonElement ownerVal = default;
+            bool hasOwner = repo.TryGetProperty("owner", out ownerVal) && ownerVal.ValueKind == JsonValueKind.Object;
+
+
+        // Safely access repository properties
+
+        return new Repository
+        {
+            Id = repo.TryGetProperty("id", out var id) && id.ValueKind == JsonValueKind.Number ? id.GetInt32() : 0,
+            Name = repo.TryGetProperty("name", out var name) && name.ValueKind == JsonValueKind.String ? name.GetString() : "Unknown",
+            FullName = repo.TryGetProperty("full_name", out var fullName) && fullName.ValueKind == JsonValueKind.String ? fullName.GetString() : "Unknown",
+            HtmlUrl = repo.TryGetProperty("html_url", out var htmlUrl) && htmlUrl.ValueKind == JsonValueKind.String ? htmlUrl.GetString() : "Unknown",
+            Description = repo.TryGetProperty("description", out var description) && description.ValueKind == JsonValueKind.String ? description.GetString() : null,
+            Language = repo.TryGetProperty("language", out var language) && language.ValueKind == JsonValueKind.String ? language.GetString() : "Unknown",
+            Stars = repo.TryGetProperty("stargazers_count", out var stars) && stars.ValueKind == JsonValueKind.Number ? stars.GetInt32() : 0,
+            Forks = repo.TryGetProperty("forks_count", out var forks) && forks.ValueKind == JsonValueKind.Number ? forks.GetInt32() : 0,
+            WatchersCount = repo.TryGetProperty("watchers_count", out var watchers) && watchers.ValueKind == JsonValueKind.Number ? watchers.GetInt32() : 0,
+            Visibility = repo.TryGetProperty("visibility", out var visibility) && visibility.ValueKind == JsonValueKind.String ? visibility.GetString() : "public",
+
+    // License with safeguard
+    License = repo.TryGetProperty("license", out var license) && license.ValueKind == JsonValueKind.Object &&
+              license.TryGetProperty("name", out var licenseName) && licenseName.ValueKind == JsonValueKind.String
+              ? licenseName.GetString() : null,
+
+    // Dates with null checks
+    CreatedAt = repo.TryGetProperty("created_at", out var createdAt) && createdAt.ValueKind == JsonValueKind.String &&
+                DateTime.TryParse(createdAt.GetString(), out var createdDate) ? createdDate : (DateTime?)null,
+    UpdatedAt = repo.TryGetProperty("updated_at", out var updatedAt) && updatedAt.ValueKind == JsonValueKind.String &&
+                DateTime.TryParse(updatedAt.GetString(), out var updatedDate) ? updatedDate : (DateTime?)null,
+    PushedAt = repo.TryGetProperty("pushed_at", out var pushedAt) && pushedAt.ValueKind == JsonValueKind.String &&
+               DateTime.TryParse(pushedAt.GetString(), out var pushedDate) ? pushedDate : (DateTime?)null,
+
+    // Additional URLs with null checks
+    CloneUrl = repo.TryGetProperty("clone_url", out var cloneUrl) && cloneUrl.ValueKind == JsonValueKind.String ? cloneUrl.GetString() : null,
+    IssuesUrl = repo.TryGetProperty("issues_url", out var issuesUrl) && issuesUrl.ValueKind == JsonValueKind.String ? issuesUrl.GetString() : null,
+    PullsUrl = repo.TryGetProperty("pulls_url", out var pullsUrl) && pullsUrl.ValueKind == JsonValueKind.String ? pullsUrl.GetString() : null,
+    ReleasesUrl = repo.TryGetProperty("releases_url", out var releasesUrl) && releasesUrl.ValueKind == JsonValueKind.String ? releasesUrl.GetString() : null,
+
+    // Owner details with safeguard
+    OwnerLogin = repo.TryGetProperty("owner", out var owner) && owner.ValueKind == JsonValueKind.Object &&
+                 owner.TryGetProperty("login", out var login) && login.ValueKind == JsonValueKind.String
+                 ? login.GetString()
+                 : null,
+    OwnerHtmlUrl = owner.ValueKind == JsonValueKind.Object &&
+                   owner.TryGetProperty("html_url", out var ownerHtmlUrl) && ownerHtmlUrl.ValueKind == JsonValueKind.String
+                   ? ownerHtmlUrl.GetString()
+                   : null
+};
+    })
+            .Where(repo => repo != null)  // Ensure no null objects are returned
             .ToList();
 
-        return Results.Json(repositories);
+            return Results.Json(repositories);
+} catch (Exception ex)
+    {
+        return Results.Problem($"An unexpected error occurred: {ex.Message}");
+    }
+});
+
+
+
+
+
+
+app.MapGet("/search-issues", async (
+    string query,
+    bool? goodFirstIssue = false,
+    bool? helpWanted = false,
+    string? createdAfter = null,
+    string? updatedAfter = null,
+    int? minOpenIssues = null
+) =>
+{
+    if (string.IsNullOrWhiteSpace(query))
+    {
+        return Results.BadRequest("Query parameter is required.");
+    }
+
+    string filter = $"{query} is:issue is:open";
+    if (goodFirstIssue == true) filter += " label:\"good first issue\"";
+    if (helpWanted == true) filter += " label:\"help wanted\"";
+    if (minOpenIssues.HasValue) filter += $" open_issues:>{minOpenIssues.Value}";
+    if (!string.IsNullOrWhiteSpace(createdAfter)) filter += $" created:>{createdAfter}";
+    if (!string.IsNullOrWhiteSpace(updatedAfter)) filter += $" updated:>{updatedAfter}";
+
+    var url = $"https://api.github.com/search/issues?q={Uri.EscapeDataString(filter)}";
+
+    using var client = new HttpClient();
+    client.DefaultRequestHeaders.UserAgent.Add(new ProductInfoHeaderValue("App", "1.0"));
+
+    var response = await client.GetAsync(url);
+    if (!response.IsSuccessStatusCode)
+    {
+        return Results.StatusCode((int)response.StatusCode);
+    }
+
+    try
+    {
+        var jsonResponse = await response.Content.ReadAsStringAsync();
+        var rootElement = JsonSerializer.Deserialize<JsonElement>(jsonResponse);
+        var items = rootElement.GetProperty("items");
+
+       var issues = items.EnumerateArray().Select(issue => new
+{
+    Id = issue.TryGetProperty("id", out var id) ? id.GetInt64() : 0,
+    Title = issue.TryGetProperty("title", out var title) ? title.GetString() : "",
+    HtmlUrl = issue.TryGetProperty("html_url", out var htmlUrl) ? htmlUrl.GetString() : "",
+    State = issue.TryGetProperty("state", out var state) ? state.GetString() : "unknown",
+    Body = issue.TryGetProperty("body", out var body) ? body.GetString() : null,
+    CreatedAt = issue.TryGetProperty("created_at", out var createdAt) && 
+                createdAt.ValueKind == JsonValueKind.String &&
+                DateTime.TryParse(createdAt.GetString(), out var createdDate)
+                ? createdDate : (DateTime?)null,
+    UpdatedAt = issue.TryGetProperty("updated_at", out var updatedAt) && 
+                updatedAt.ValueKind == JsonValueKind.String &&
+                DateTime.TryParse(updatedAt.GetString(), out var updatedDate)
+                ? updatedDate : (DateTime?)null,
+    Comments = issue.TryGetProperty("comments", out var comments) ? comments.GetInt32() : 0,
+    RepositoryUrl = issue.TryGetProperty("repository_url", out var repoUrl) ? repoUrl.GetString() : null,
+    Labels = issue.TryGetProperty("labels", out var labels) && labels.ValueKind == JsonValueKind.Array
+        ? labels.EnumerateArray()
+            .Select(label => label.TryGetProperty("name", out var name) ? name.GetString() : "")
+            .Where(name => !string.IsNullOrEmpty(name))
+            .ToList()
+        : new List<string>()
+}).ToList();
+
+        return Results.Ok(new
+        {
+            TotalCount = rootElement.GetProperty("total_count").GetInt32(),
+            Items = issues
+        });
     }
     catch (Exception ex)
     {
-        Console.WriteLine($"Error reshaping response: {ex.Message}");
-        return Results.StatusCode(500);
+        return Results.Problem($"An error occurred: {ex.Message}");
     }
 });
 

@@ -17,7 +17,7 @@ export const Home = () => {
   const [searchResults, setSearchResults] = useState([]);
   const [error, setError] = useState("");
   //1-9 SO WE GET BACK DATA BUT ITS NOT DISPLAYING PROPERLY I CONSOLE LOG DATA FROM HERE WE CAN RESTRUCTURE THIS PART THAT RECEIVS RESPOSNE
-  // BETTER IN WAY SO IT ACTUALLY CORRESPODNS TO DATA STRUCTURE THAT IS NEXT TASK 
+  // BETTER IN WAY SO IT ACTUALLY CORRESPODNS TO DATA STRUCTURE THAT IS NEXT TASK
 
   const handleSearchRepositories = async () => {
     if (!query.trim()) {
@@ -151,7 +151,10 @@ export const Home = () => {
 
         <label>
           <span>Visibility:</span>
-          <select value={visibility} onChange={(e) => setVisibility(e.target.value)}>
+          <select
+            value={visibility}
+            onChange={(e) => setVisibility(e.target.value)}
+          >
             <option value="">Any</option>
             <option value="public">Public</option>
             <option value="private">Private</option>
@@ -176,36 +179,54 @@ export const Home = () => {
       {error && <p className="error-message">{error}</p>}
 
       <div className="search-results">
-  <h2>Search Results</h2>
-  <ul>
-    {searchResults.map((result, index) => (
-      <li key={index}>
-        <a href={result.htmlUrl} target="_blank" rel="noopener noreferrer">
-          {result.fullName}
-        </a>
-        <p>{result.description || "No description provided."}</p>
-        <p>Stars: {result.stars} | Forks: {result.forks}</p>
-        <p>Created At: {new Date(result.createdAt).toLocaleDateString()}</p>
-        <p>Last Pushed: {new Date(result.pushedAt).toLocaleDateString()}</p>
-        <p>Last Updated: {new Date(result.updatedAt).toLocaleDateString()}</p>
-        <p>Language: {result.language || "Not specified"}</p>
-        <p>Topics: {result.topics.length > 0 ? result.topics.join(", ") : "None"}</p>
-        <p>
-          Owner:{" "}
-          <a href={result.owner.htmlUrl} target="_blank" rel="noopener noreferrer">
-            {result.owner.name}
-          </a>
-        </p>
-        <p>Open Issues: {result.openIssues}</p>
-        <p>
-          Projects: {result.hasProjects ? "Yes" : "No"} | Issues Enabled:{" "}
-          {result.hasIssues ? "Yes" : "No"}
-        </p>
-      </li>
-    ))}
-  </ul>
-</div>
-
+        <h2>Search Results</h2>
+        <ul>
+          {searchResults.map((result, index) => (
+            <li key={index}>
+              <a
+                href={result.htmlUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                {result.fullName}
+              </a>
+              <p>{result.description || "No description provided."}</p>
+              <p>
+                Stars: {result.stars} | Forks: {result.forks}
+              </p>
+              <p>
+                Created At: {new Date(result.createdAt).toLocaleDateString()}
+              </p>
+              <p>
+                Last Pushed: {new Date(result.pushedAt).toLocaleDateString()}
+              </p>
+              <p>
+                Last Updated: {new Date(result.updatedAt).toLocaleDateString()}
+              </p>
+              <p>Language: {result.language || "Not specified"}</p>
+              <p>
+                Topics:{" "}
+                {result.topics.length > 0 ? result.topics.join(", ") : "None"}
+              </p>
+              <p>
+                Owner:{" "}
+                <a
+                  href={result.owner.htmlUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  {result.owner.name}
+                </a>
+              </p>
+              <p>Open Issues: {result.openIssues}</p>
+              <p>
+                Projects: {result.hasProjects ? "Yes" : "No"} | Issues Enabled:{" "}
+                {result.hasIssues ? "Yes" : "No"}
+              </p>
+            </li>
+          ))}
+        </ul>
+      </div>
     </div>
   );
 };

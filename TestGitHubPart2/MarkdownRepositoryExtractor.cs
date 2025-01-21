@@ -1,5 +1,7 @@
-namespace TestDemo
-{
+using  PostMVPProject.Models;
+
+namespace PostMVPProject.Extractor;
+
 public class MarkdownRepositoryExtractor{
   //This class takes the raw markdown text and turns it into a list of repositories.
     public static List<Repository> ExtractRepositoriesFromMarkdown(string markdown)
@@ -35,16 +37,26 @@ public class MarkdownRepositoryExtractor{
                 repos.Add(new Repository
                 {
                     Name = match.Groups[1].Value,          // freeCodeCamp
-                    Url = match.Groups[2].Value,           // https://github.com/freeCodeCamp/freeCodeCamp
+                    HtmlUrl = match.Groups[2].Value,           // https://github.com/freeCodeCamp/freeCodeCamp
                     Description = match.Groups[3].Value,  // A coding curriculum
                     Language = currentLanguage,            // JavaScript (from earlier) // Default values for new properties that require API calls is what all above are 
+
+                     // Setting default values for other properties to prevent null reference issues
+                    Stars = 0,
+                    Forks = 0,
+                    OpenIssuesCount = 0,
+                    HasIssues = false,
+                    HasProjects = false,
+                    Topics = new List<string>(),
+                    Visibility = "public",
+                    CreatedAt = DateTime.UtcNow,
+                    UpdatedAt = DateTime.UtcNow
                 });
             }
         }
 
         return repos;
     }
-}
 }
 //want to parse the markdown text into useful repository objects 
 
