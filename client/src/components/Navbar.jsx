@@ -32,6 +32,9 @@ export const NavBar = ({ loggedInUser, setLoggedInUser }) => {
           <Link to="/annotations/add">Create A New Annotation</Link>
         </li>
         <li>
+          <Link to="/search/issues"> Search Issues </Link>
+        </li>
+        <li>
           <Link to={`/repositories/user/${userId}`}>Get Your Saved Repositories</Link>
         </li>
         <li>
