@@ -129,8 +129,6 @@ export const searchRepositories = async (params = {}) => {
 export const searchTestFilterSearch = async ({
   query,
   type = "repositories",
-  goodFirstIssue = false,
-  helpWanted = false,
   minStars = null,
   maxStars = null,
   language = null,
@@ -143,14 +141,11 @@ export const searchTestFilterSearch = async ({
   readmeKeyword = null,
 }) => {
   try {
-    const BASE_URL = "http://localhost:5056"; // Update with your backend URL
-    const url = new URL("/testFilterSearch", BASE_URL);
-
+    const BASE_URL = "http://localhost:5056";
+    // Update this line to match your controller route
+    const url = new URL("/api/repository/search-repositories", BASE_URL);
     // Append query parameters
     if (query) url.searchParams.append("query", query);
-    if (type) url.searchParams.append("type", type);
-    if (goodFirstIssue) url.searchParams.append("goodFirstIssue", goodFirstIssue.toString());
-    if (helpWanted) url.searchParams.append("helpWanted", helpWanted.toString());
     if (minStars) url.searchParams.append("minStars", minStars);
     if (maxStars) url.searchParams.append("maxStars", maxStars);
     if (language) url.searchParams.append("language", language);

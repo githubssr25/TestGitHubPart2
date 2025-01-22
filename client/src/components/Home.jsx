@@ -40,7 +40,6 @@ export const Home = () => {
         visibility,
         readmeKeyword,
       });
-      console.log("what is data ie hte response", data);
       setSearchResults(data);
       setError("");
     } catch (err) {
@@ -49,184 +48,230 @@ export const Home = () => {
     }
   };
 
+
   return (
-    <div className="home-container">
-      <h1>GitHub Repository Search</h1>
-
-      <form onSubmit={(e) => e.preventDefault()} className="search-form">
-        <label>
-          <span>Query (required):</span>
-          <input
-            type="text"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="e.g., React, JavaScript"
-            required
-          />
-        </label>
-
-        <label>
-          <span>Type:</span>
-          <select value={type} onChange={(e) => setType(e.target.value)}>
-            <option value="repositories">Repositories</option>
-            <option value="issues">Issues</option>
-          </select>
-        </label>
-
-        <label>
-          <span>Language:</span>
-          <input
-            type="text"
-            value={language}
-            onChange={(e) => setLanguage(e.target.value)}
-            placeholder="e.g., JavaScript"
-          />
-        </label>
-
-        <label>
-          <span>Min Stars:</span>
-          <input
-            type="number"
-            value={minStars}
-            onChange={(e) => setMinStars(e.target.value)}
-            placeholder="e.g., 100"
-          />
-        </label>
-
-        <label>
-          <span>Max Stars:</span>
-          <input
-            type="number"
-            value={maxStars}
-            onChange={(e) => setMaxStars(e.target.value)}
-            placeholder="e.g., 500"
-          />
-        </label>
-
-        <label>
-          <span>Created After:</span>
-          <input
-            type="date"
-            value={createdAfter}
-            onChange={(e) => setCreatedAfter(e.target.value)}
-          />
-        </label>
-
-        <label>
-          <span>Updated After:</span>
-          <input
-            type="date"
-            value={updatedAfter}
-            onChange={(e) => setUpdatedAfter(e.target.value)}
-          />
-        </label>
-
-        <label>
-          <span>Pushed Before:</span>
-          <input
-            type="date"
-            value={pushedBefore}
-            onChange={(e) => setPushedBefore(e.target.value)}
-          />
-        </label>
-
-        <label>
-          <span>Has Open Issues:</span>
-          <input
-            type="checkbox"
-            checked={hasOpenIssues}
-            onChange={(e) => setHasOpenIssues(e.target.checked)}
-          />
-        </label>
-
-        <label>
-          <span>Topics:</span>
-          <input
-            type="text"
-            value={topics}
-            onChange={(e) => setTopics(e.target.value)}
-            placeholder="e.g., front-end, back-end"
-          />
-        </label>
-
-        <label>
-          <span>Visibility:</span>
-          <select
-            value={visibility}
-            onChange={(e) => setVisibility(e.target.value)}
-          >
-            <option value="">Any</option>
-            <option value="public">Public</option>
-            <option value="private">Private</option>
-          </select>
-        </label>
-
-        <label>
-          <span>Readme Keywords:</span>
-          <input
-            type="text"
-            value={readmeKeyword}
-            onChange={(e) => setReadmeKeyword(e.target.value)}
-            placeholder="e.g., beginner"
-          />
-        </label>
-
-        <button type="button" onClick={handleSearchRepositories}>
-          Search
-        </button>
-      </form>
-
-      {error && <p className="error-message">{error}</p>}
-
-      <div className="search-results">
-        <h2>Search Results</h2>
-        <ul>
-          {searchResults.map((result, index) => (
-            <li key={index}>
-              <a
-                href={result.htmlUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                {result.fullName}
-              </a>
-              <p>{result.description || "No description provided."}</p>
-              <p>
-                Stars: {result.stars} | Forks: {result.forks}
-              </p>
-              <p>
-                Created At: {new Date(result.createdAt).toLocaleDateString()}
-              </p>
-              <p>
-                Last Pushed: {new Date(result.pushedAt).toLocaleDateString()}
-              </p>
-              <p>
-                Last Updated: {new Date(result.updatedAt).toLocaleDateString()}
-              </p>
-              <p>Language: {result.language || "Not specified"}</p>
-              <p>
-                Topics:{" "}
-                {result.topics.length > 0 ? result.topics.join(", ") : "None"}
-              </p>
-              <p>
-                Owner:{" "}
-                <a
-                  href={result.owner.htmlUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  {result.owner.name}
-                </a>
-              </p>
-              <p>Open Issues: {result.openIssues}</p>
-              <p>
-                Projects: {result.hasProjects ? "Yes" : "No"} | Issues Enabled:{" "}
-                {result.hasIssues ? "Yes" : "No"}
-              </p>
-            </li>
-          ))}
-        </ul>
+      <div className="home-container">
+        <h1>GitHub Repository Search</h1>
+    
+        <form onSubmit={(e) => e.preventDefault()} className="search-form">
+          <label>
+            <span>Query (required):</span>
+            <input
+              type="text"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="e.g., React, JavaScript"
+              required
+            />
+          </label>
+    
+          <label>
+            <span>Type:</span>
+            <select value={type} onChange={(e) => setType(e.target.value)}>
+              <option value="repositories">Repositories</option>
+              <option value="issues">Issues</option>
+            </select>
+          </label>
+    
+          <label>
+            <span>Language:</span>
+            <input
+              type="text"
+              value={language}
+              onChange={(e) => setLanguage(e.target.value)}
+              placeholder="e.g., JavaScript"
+            />
+          </label>
+    
+          <label>
+            <span>Min Stars:</span>
+            <input
+              type="number"
+              value={minStars}
+              onChange={(e) => setMinStars(e.target.value)}
+              placeholder="e.g., 100"
+            />
+          </label>
+    
+          <label>
+            <span>Max Stars:</span>
+            <input
+              type="number"
+              value={maxStars}
+              onChange={(e) => setMaxStars(e.target.value)}
+              placeholder="e.g., 500"
+            />
+          </label>
+    
+          <label>
+            <span>Created After:</span>
+            <input
+              type="date"
+              value={createdAfter}
+              onChange={(e) => setCreatedAfter(e.target.value)}
+            />
+          </label>
+    
+          <label>
+            <span>Updated After:</span>
+            <input
+              type="date"
+              value={updatedAfter}
+              onChange={(e) => setUpdatedAfter(e.target.value)}
+            />
+          </label>
+    
+          <label>
+            <span>Pushed Before:</span>
+            <input
+              type="date"
+              value={pushedBefore}
+              onChange={(e) => setPushedBefore(e.target.value)}
+            />
+          </label>
+    
+          <label>
+            <span>Has Open Issues:</span>
+            <input
+              type="checkbox"
+              checked={hasOpenIssues}
+              onChange={(e) => setHasOpenIssues(e.target.checked)}
+            />
+          </label>
+    
+          <label>
+            <span>Topics:</span>
+            <input
+              type="text"
+              value={topics}
+              onChange={(e) => setTopics(e.target.value)}
+              placeholder="e.g., front-end, back-end"
+            />
+          </label>
+    
+          <label>
+            <span>Visibility:</span>
+            <select value={visibility} onChange={(e) => setVisibility(e.target.value)}>
+              <option value="">Any</option>
+              <option value="public">Public</option>
+              <option value="private">Private</option>
+            </select>
+          </label>
+    
+          <label>
+            <span>Readme Keywords:</span>
+            <input
+              type="text"
+              value={readmeKeyword}
+              onChange={(e) => setReadmeKeyword(e.target.value)}
+              placeholder="e.g., beginner"
+            />
+          </label>
+    
+          <button type="button" onClick={handleSearchRepositories}>
+            Search
+          </button>
+        </form>
+    
+        {error && <p className="error-message">{error}</p>}
+    
+        <div className="search-results">
+          <h2>Search Results</h2>
+          <ul>
+            {searchResults.map((repo) => (
+              <li key={repo.id} className="repository-item">
+                <div className="repo-header">
+                  <h3>
+                    <a href={repo.htmlUrl} target="_blank" rel="noopener noreferrer">
+                      {repo.fullName}
+                    </a>
+                  </h3>
+                  <p className="repo-description">
+                    {repo.description || "No description provided."}
+                  </p>
+                </div>
+    
+                <div className="repo-stats">
+                  <span className="stat-item">Stars: {repo.stars}</span>
+                  <span className="stat-item">Forks: {repo.forks}</span>
+                  <span className="stat-item">Watchers: {repo.watchersCount}</span>
+                  {repo.openIssuesCount && (
+                    <span className="stat-item">Open Issues: {repo.openIssuesCount}</span>
+                  )}
+                </div>
+    
+                <div className="repo-details">
+                  <div className="details-section">
+                    <p>Language: {repo.language || "Not specified"}</p>
+                    <p>Visibility: {repo.visibility}</p>
+                    {repo.license && <p>License: {repo.license}</p>}
+                  </div>
+    
+                  <div className="repo-features">
+                    <p>Repository Features:</p>
+                    <p>Issues: {repo.hasIssues ? "Enabled" : "Disabled"}</p>
+                    <p>Projects: {repo.hasProjects ? "Enabled" : "Disabled"}</p>
+                  </div>
+                </div>
+    
+                <div className="repo-dates">
+                  <h4>Timeline</h4>
+                  <div className="dates-grid">
+                    <p>Created: {repo.createdAt ? new Date(repo.createdAt).toLocaleDateString() : "N/A"}</p>
+                    <p>Updated: {repo.updatedAt ? new Date(repo.updatedAt).toLocaleDateString() : "N/A"}</p>
+                    <p>Pushed: {repo.pushedAt ? new Date(repo.pushedAt).toLocaleDateString() : "N/A"}</p>
+                  </div>
+                </div>
+    
+                <div className="repo-links">
+                  {repo.ownerLogin && (
+                    <p>
+                      Owner:{" "}
+                      <a href={repo.ownerHtmlUrl} target="_blank" rel="noopener noreferrer">
+                        {repo.ownerLogin}
+                      </a>
+                    </p>
+                  )}
+                  <div className="links-grid">
+                    {repo.cloneUrl && (
+                      <p>
+                        Clone URL: <a href={repo.cloneUrl}>View</a>
+                      </p>
+                    )}
+                    {repo.issuesUrl && (
+                      <p>
+                        Issues: <a href={repo.issuesUrl}>View</a>
+                      </p>
+                    )}
+                    {repo.pullsUrl && (
+                      <p>
+                        Pull Requests: <a href={repo.pullsUrl}>View</a>
+                      </p>
+                    )}
+                    {repo.releasesUrl && (
+                      <p>
+                        Releases: <a href={repo.releasesUrl}>View</a>
+                      </p>
+                    )}
+                  </div>
+                </div>
+    
+                {repo.topics && repo.topics.length > 0 && (
+                  <div className="topics-section">
+                    <h4>Topics</h4>
+                    <div className="topics-list">
+                      {repo.topics.map((topic, index) => (
+                        <span key={index} className="topic">
+                          {topic}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
       </div>
-    </div>
-  );
-};
+    );
+}
