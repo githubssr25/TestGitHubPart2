@@ -1,24 +1,40 @@
-const _apiUrl = "http://localhost:5201/api/auth";
+const _apiUrl = "http://localhost:5056/api/auth";
 
 // Login method
 export const login = async (email, password) => {
   try {
+    console.log("Attempting to log in with:", { email, password });
+
     const response = await fetch(_apiUrl + "/login", {
       method: "POST",
+      credentials: "include",  // Important for cookies/session
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email, password }),
     });
 
+    console.log("Login response status:", response.status);
+
     if (!response.ok) {
-      throw new Error(`Login failed: ${response.statusText}`);
+      const errorText = await response.text();
+      console.error("Login failed with status:", response.status, "Message:", errorText);
+      return null;
     }
 
-    return await response.json(); // Response from the backend (e.g., success message)
+    const data = await response.json();
+    console.log("Login successful, response data:", data);
+
+    // If GitHub authentication is required, redirect the user
+    if (data.githubAuthUrl) {
+      window.location.href = data.githubAuthUrl;
+    }
+
+    return data;
   } catch (error) {
-    console.error("Error during login:", error);
-    throw error;
+    console.error("Error during login:", error.message);
+    return null;
   }
 };
+
 
 // Logout method
 export const logout = async () => {

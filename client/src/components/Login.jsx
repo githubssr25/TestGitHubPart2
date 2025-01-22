@@ -10,18 +10,31 @@ export const Login = ({ setLoggedInUser }) => {
   const [failedLogin, setFailedLogin] = useState(false);
   const navigate = useNavigate();
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    login(email, password).then((user) => {
+  
+    try {
+      const user = await login(email, password);
+  
       if (!user) {
         setFailedLogin(true);
-      } else {
-        localStorage.setItem("loggedInUser", JSON.stringify(user));
-        setLoggedInUser(user);
-        navigate("/");
+        return;
       }
-    });
+  
+      if (user.githubAuthUrl) {
+        console.log("Redirecting to GitHub authentication...");
+        window.location.href = user.githubAuthUrl;
+        return;
+      }
+  
+      localStorage.setItem("loggedInUser", JSON.stringify(user));
+      setLoggedInUser(user);
+      navigate("/");
+    } catch (error) {
+      console.error("Login submission error:", error);
+    }
   };
+  
 
   return (
     <div className="container">

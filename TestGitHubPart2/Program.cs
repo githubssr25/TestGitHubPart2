@@ -31,15 +31,39 @@ var personalAccessToken = config["GitHub:PersonalAccessToken"];
 
 //https://goodfirstissues.com/
 
+
+// Add controllers
+// builder.Services.AddControllers();
+
+// Add controllers with JSON cycle handling
+builder.Services.AddControllers().AddJsonOptions(opts => {
+    opts.JsonSerializerOptions.ReferenceHandler = ReferenceHandler.IgnoreCycles;
+});
+
 // Configure database context
 builder.Services.AddDbContext<GitHubPostMVPDbContext>(options =>
     options.UseNpgsql(config.GetConnectionString("GitHubPostMVPConnection")));
 
+    // Configure Identity
+builder.Services.AddIdentityCore<User>(options => {
+    options.Password.RequireDigit = false;
+    options.Password.RequiredLength = 8;
+    options.Password.RequireLowercase = false;
+    options.Password.RequireNonAlphanumeric = false;
+    options.Password.RequireUppercase = false;
+    options.User.RequireUniqueEmail = true;
+})
+.AddEntityFrameworkStores<GitHubPostMVPDbContext>()
+.AddDefaultTokenProviders();
+
+// Add HttpClient factory
+builder.Services.AddHttpClient();
 
  // Add session services ADDING THIS 1-13-24 FOR OAUTH SECURITY 
 builder.Services.AddDistributedMemoryCache();
 builder.Services.AddSession(options =>
 {
+    options.Cookie.Name = ".GitHubAuth.Session";
     options.Cookie.HttpOnly = true; // Prevent JavaScript access to session cookie
     options.Cookie.IsEssential = true; // Ensure session works even if GDPR cookie consent is required
     options.IdleTimeout = TimeSpan.FromMinutes(60); // Set session timeout
@@ -47,17 +71,31 @@ builder.Services.AddSession(options =>
 
 
 // Configure Identity (if needed)
-builder.Services.AddIdentity<IdentityUser, IdentityRole>()
-    .AddEntityFrameworkStores<GitHubPostMVPDbContext>()
-    .AddDefaultTokenProviders();
+// builder.Services.AddIdentity<IdentityUser, IdentityRole>()
+//     .AddEntityFrameworkStores<GitHubPostMVPDbContext>()
+//     .AddDefaultTokenProviders();
 
-// Configure authentication (if needed)
-builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
-    .AddCookie(options =>
-    {
-        options.LoginPath = "/login";
-        options.LogoutPath = "/logout";
-    });
+// Configure Authentication
+builder.Services.AddAuthentication(options => 
+{
+    options.DefaultScheme = CookieAuthenticationDefaults.AuthenticationScheme;
+    options.DefaultSignInScheme = CookieAuthenticationDefaults.AuthenticationScheme;
+    options.DefaultAuthenticateScheme = CookieAuthenticationDefaults.AuthenticationScheme;
+})
+.AddCookie(options =>
+{
+    options.Cookie.HttpOnly = true;
+    options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
+    options.Cookie.SameSite = SameSiteMode.Lax;
+    options.LoginPath = "/api/auth/login";
+    options.LogoutPath = "/api/auth/logout";
+    options.AccessDeniedPath = "/api/auth/denied";
+    options.ExpireTimeSpan = TimeSpan.FromHours(24);
+    options.SlidingExpiration = true;
+});
+
+// Add this line here!
+builder.Services.AddAuthorization();
 
 // Configure logging (optional)
 builder.Logging.ClearProviders();
@@ -84,14 +122,29 @@ builder.Services.AddCors(options =>
         {
             policy.WithOrigins("http://localhost:5173") // Frontend URL
                   .AllowAnyHeader()
-                  .AllowAnyMethod();
+                  .AllowAnyMethod()
+                  .AllowCredentials(); // Added for cookie auth
         });
 });
 
 var app = builder.Build();
 
+
+app.UseHttpsRedirection();
+app.UseStaticFiles();
+app.UseRouting();
+
+
 // Use CORS policy
 app.UseCors("AllowFrontend");
+
+// Add authentication middleware
+app.UseAuthentication();
+app.UseAuthorization();
+
+app.UseSession();
+
+app.MapControllers();
 
 
 //doesnt appear to be working 

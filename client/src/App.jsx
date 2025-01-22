@@ -10,18 +10,28 @@ function App() {
   const [loggedInUser, setLoggedInUser] = useState();
 
   useEffect(() => {
-    const storedUser = localStorage.getItem("loggedInUser");
-    if (storedUser) {
-      setLoggedInUser(JSON.parse(storedUser));
+    const urlParams = new URLSearchParams(window.location.search);
+    const userId = urlParams.get("userId");
+
+    if (userId) {
+      console.log("Received userId from query params:", userId);
+      localStorage.setItem("loggedInUserId", userId);
+
+      getUserById(userId).then((user) => {
+        if (user) {
+          localStorage.setItem("loggedInUser", JSON.stringify(user));
+          setLoggedInUser(user);
+          window.location.href = "/";  // Redirect to homepage after login
+        }
+      });
+
+      // Clean up the URL to remove the query parameter
+      window.history.replaceState({}, document.title, "/");
     } else {
-      const storedUserId = localStorage.getItem("loggedInUserId");
-      if (storedUserId) {
-        getUserById(storedUserId).then((user) => {
-          if (user) {
-            localStorage.setItem("loggedInUser", JSON.stringify(user));
-            setLoggedInUser(user);
-          }
-        });
+      // If no userId in the URL, check local storage
+      const storedUser = localStorage.getItem("loggedInUser");
+      if (storedUser) {
+        setLoggedInUser(JSON.parse(storedUser));
       } else {
         setLoggedInUser(null);
       }
@@ -34,7 +44,6 @@ function App() {
 
   return (
     <>
-      {/* <NavBar loggedInUser={loggedInUser} setLoggedInUser={setLoggedInUser} /> */}
       <ApplicationViews
         loggedInUser={loggedInUser}
         setLoggedInUser={setLoggedInUser}

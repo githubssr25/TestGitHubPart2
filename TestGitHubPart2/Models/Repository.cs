@@ -42,5 +42,10 @@ public class Repository
     public ICollection<Issue> Issues { get; set; }  // Add missing relationship
     public ICollection<Annotation> Annotations { get; set; } // Fix name to plural
 
+    public int? CategoryId { get; set; }
+    public Category? Category { get; set; }
+
+
+
 
 }
