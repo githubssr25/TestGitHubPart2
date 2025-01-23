@@ -35,6 +35,9 @@ export const NavBar = ({ loggedInUser, setLoggedInUser }) => {
           <Link to="/search/issues"> Search Issues </Link>
         </li>
         <li>
+          <Link to="/issues/create"> Create Issues</Link>
+        </li>
+        <li>
           <Link to={`/repositories/user/${userId}`}>Get Your Saved Repositories</Link>
         </li>
         <li>

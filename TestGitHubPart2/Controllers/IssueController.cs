@@ -6,6 +6,7 @@ using System.Security.Claims;
 using PostMVPProject.Models.DTOs;
 using Microsoft.AspNetCore.Identity;
 using PostMVPProject.Models;
+using PostMVPFinalProject.Context;
 
 
 
@@ -14,76 +15,132 @@ namespace postMVPFinalProject.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
-    // [Authorize] // Ensures user is authenticated
-    public class IssuesController : ControllerBase
-    {
-        private readonly IHttpClientFactory _httpClientFactory;
-        private readonly UserManager<User> _userManager;
+    [Authorize] // Ensures user is authenticated
 
+public class IssuesController : ControllerBase
+{
+   private readonly IHttpClientFactory _httpClientFactory;
+   private readonly UserManager<User> _userManager;
+   private readonly GitHubPostMVPDbContext _context;
 
-        public IssuesController(
-            IHttpClientFactory httpClientFactory,
-            UserManager<User> userManager)
-        {
-            _httpClientFactory = httpClientFactory;
-            _userManager = userManager;
-        }
+   public IssuesController(
+       IHttpClientFactory httpClientFactory,
+       UserManager<User> userManager,
+       GitHubPostMVPDbContext context)
+   {
+       _httpClientFactory = httpClientFactory;
+       _userManager = userManager;
+       _context = context;
+   }
 
-        [HttpPost("create")]
-        public async Task<IActionResult> CreateIssue([FromBody] CreateIssueDTO issueDto)
-        {
-            try
-            {
-                // Get current user
-                var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
-                var user = await _userManager.FindByIdAsync(userId);
-                
-                if (user == null || string.IsNullOrEmpty(user.GitHubToken))
-                {
-                    return Unauthorized("GitHub authentication required");
-                }
+   private string FormatIssueBody(CreateIssueDTO issueDto)
+   {
+       return $@"
+           ### Description
+           {issueDto.Body}
 
-                // Create GitHub API client
-                var client = _httpClientFactory.CreateClient();
-                client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/vnd.github+json"));
-                client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", user.GitHubToken);
-                client.DefaultRequestHeaders.UserAgent.Add(new ProductInfoHeaderValue("YourApp", "1.0"));
+           {(string.IsNullOrEmpty(issueDto.CodePath) ? "" : $@"### Code Location
+           `{issueDto.CodePath}`")}
 
-                // Prepare the issue data
-                var issueData = new
-                {
-                    title = issueDto.Title,
-                    body = issueDto.Body,
-                    labels = issueDto.Labels ?? new List<string>()
-                };
+           {(string.IsNullOrEmpty(issueDto.CodeSnippet) ? "" : $@"### Code Snippet
+           `{issueDto.CodeSnippet}`")}
 
-                var content = new StringContent(
-                    JsonSerializer.Serialize(issueData),
-                    System.Text.Encoding.UTF8,
-                    "application/json");
+           {(string.IsNullOrEmpty(issueDto.StepsToReproduce) ? "" : $@"### Steps to Reproduce
+           {issueDto.StepsToReproduce}")}
 
-                // Make request to GitHub API
-                var response = await client.PostAsync(
-                    $"https://api.github.com/repos/{issueDto.RepositoryOwner}/{issueDto.RepositoryName}/issues",
-                    content);
+           {(string.IsNullOrEmpty(issueDto.ExpectedBehavior) ? "" : $@"### Expected Behavior
+           {issueDto.ExpectedBehavior}")}
 
-                if (!response.IsSuccessStatusCode)
-                {
-                    var errorContent = await response.Content.ReadAsStringAsync();
-                    return StatusCode((int)response.StatusCode, 
-                        $"GitHub API error: {response.StatusCode} - {errorContent}");
-                }
+           {(string.IsNullOrEmpty(issueDto.ActualBehavior) ? "" : $@"### Actual Behavior
+           {issueDto.ActualBehavior}")}
 
-                var createdIssue = await response.Content.ReadAsStringAsync();
-                return Ok(JsonSerializer.Deserialize<JsonElement>(createdIssue));
-            }
-            catch (Exception ex)
-            {
-                return StatusCode(500, $"An error occurred: {ex.Message}");
-            }
-        }
+           {(string.IsNullOrEmpty(issueDto.Environment) ? "" : $@"### Environment
+           {issueDto.Environment}")}"
+       .Trim();
+   }
 
-              [HttpGet("search-issues")]
+   [HttpPost("create")]
+   public async Task<IActionResult> CreateIssue([FromBody] CreateIssueDTO issueDto)
+   {
+       try
+       {
+           // Get current user
+           var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+           var user = await _userManager.FindByIdAsync(userId);
+           
+           if (user == null || string.IsNullOrEmpty(user.GitHubToken))
+           {
+               return Unauthorized("GitHub authentication required");
+           }
+
+           // Create GitHub API client
+           var client = _httpClientFactory.CreateClient();
+           client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/vnd.github+json"));
+           client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", user.GitHubToken);
+           client.DefaultRequestHeaders.UserAgent.Add(new ProductInfoHeaderValue("YourApp", "1.0"));
+
+           var formattedBody = FormatIssueBody(issueDto);
+
+           // Prepare the issue data
+           var issueData = new
+           {
+               title = issueDto.Title,
+               body = formattedBody,
+               labels = issueDto.Labels ?? new List<string>()
+           };
+
+           var content = new StringContent(
+               JsonSerializer.Serialize(issueData),
+               System.Text.Encoding.UTF8,
+               "application/json");
+
+           // Make request to GitHub API
+           var response = await client.PostAsync(
+               $"https://api.github.com/repos/{issueDto.RepositoryOwner}/{issueDto.RepositoryName}/issues",
+               content);
+
+           if (!response.IsSuccessStatusCode)
+           {
+               var errorContent = await response.Content.ReadAsStringAsync();
+               return StatusCode((int)response.StatusCode,
+                   $"GitHub API error: {response.StatusCode} - {errorContent}");
+           }
+
+           var gitHubResponse = await response.Content.ReadAsStringAsync();
+           var gitHubIssue = JsonSerializer.Deserialize<JsonElement>(gitHubResponse);
+
+           // Save to local DB
+           var issue = new Issue
+           {
+               Title = issueDto.Title,
+               Body = formattedBody,
+               State = "open",
+               RepositoryUrl = issueDto.RepositoryUrl,
+               HtmlUrl = gitHubIssue.GetProperty("html_url").GetString(),
+               GitHubIssueId = gitHubIssue.GetProperty("number").GetString(),
+               CreatedAt = DateTime.UtcNow,
+               UpdatedAt = DateTime.UtcNow,
+               Labels = issueDto.Labels,
+               CodePath = issueDto.CodePath,
+               CodeSnippet = issueDto.CodeSnippet,
+               StepsToReproduce = issueDto.StepsToReproduce,
+               ExpectedBehavior = issueDto.ExpectedBehavior,
+               ActualBehavior = issueDto.ActualBehavior,
+               Environment = issueDto.Environment
+           };
+
+           _context.Issues.Add(issue);
+           await _context.SaveChangesAsync();
+
+           return Ok(new { gitHubIssue, localIssue = issue });
+       }
+       catch (Exception ex)
+       {
+           return StatusCode(500, $"An error occurred: {ex.Message}");
+       }
+   }
+
+        [HttpGet("search-issues")]
         public async Task<IActionResult> SearchIssues(
             string query,
             bool? goodFirstIssue = false,

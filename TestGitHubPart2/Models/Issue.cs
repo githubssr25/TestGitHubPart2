@@ -12,6 +12,16 @@ public class Issue
     public string? RepositoryUrl { get; set; }
     public List<string>? Labels { get; set; }
 
+      public string? GitHubIssueId { get; set; } // Add this
+
+      // New optional fields
+    public string? CodePath { get; set; }
+    public string? CodeSnippet { get; set; }
+    public string? StepsToReproduce { get; set; }
+    public string? ExpectedBehavior { get; set; }
+    public string? ActualBehavior { get; set; }
+    public string? Environment { get; set; }
+
 
     // Navigation properties
     public int? RepositoryId { get; set; }

@@ -6,6 +6,7 @@ import { Home } from "./components/Home"; // Update based on the `manager` folde
 import {SearchRepositories} from "./components/SearchRepositories"; // Correct path
 import { NavBar } from "./components/Navbar"; // Correct path
 import {SearchIssues} from "./components/SearchIssues";
+import {CreateIssue} from "./components/CreateIssue";
 
 
 /* eslint-disable react/prop-types */
@@ -31,6 +32,7 @@ export const ApplicationViews = ({ loggedInUser, setLoggedInUser }) => {
         <Route index element={<Home />} />
         <Route path="search" element={<SearchRepositories />} />
         <Route path="search/issues" element={<SearchIssues />} />
+        <Route path="issues/create" element={<CreateIssue />} />
       </Route>
     </Routes>
   );
